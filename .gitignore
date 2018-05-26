@@ -1,3 +1,29 @@
+# model detect Proj
+models
+CustomObjectDetection
+
+# zip files
+*.gz
+*.zip
+
+# TensorFlow log files
+*.DS18B20-PC
+
+# csv files
+*.csv
+
+# image files
+*.jpg
+*.JPG
+*.png
+*.PNG
+
+# xml files
+*.xml
+
+# Project folder
+.idea
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
