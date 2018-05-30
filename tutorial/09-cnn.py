@@ -5,24 +5,6 @@ from tensorflow.examples.tutorials.mnist import input_data
 mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
 
 
-def add_layer(inputs, in_size, out_size, layer_name, activation_function=None):
-    with tf.name_scope('layer'):
-        with tf.name_scope('Weights'):
-            Weights = tf.Variable(tf.random_normal([in_size, out_size]), name='W')
-            tf.summary.histogram(layer_name + '/Weights', Weights)
-        with tf.name_scope('biases'):
-            biases = tf.Variable(tf.zeros([1, out_size]) + 0.1, name='b')
-            tf.summary.histogram(layer_name + '/biases', biases)
-        with tf.name_scope('W_m_p'):
-            W_m_p = tf.matmul(inputs, Weights) + biases
-        if activation_function is None:
-            outputs = W_m_p
-        else:
-            outputs = activation_function(W_m_p)
-            tf.summary.histogram(layer_name + '/outputs', outputs)
-        return outputs
-
-
 def compute_accuracy(xs_val, ys_val):
     global prediction
     y_pre = sess.run(prediction, feed_dict={xs: xs_val, keep_prob: 1})
@@ -34,15 +16,15 @@ def compute_accuracy(xs_val, ys_val):
 
 
 # define weight
-def weight_variable(shape):
+def weight_variable(shape, name):
     initial = tf.truncated_normal(shape, stddev=0.1)
-    return tf.Variable(initial)
+    return tf.Variable(initial, name=name)
 
 
 # define weight
-def bias_variable(shape):
+def bias_variable(shape, name):
     initial = tf.constant(0.1, shape=shape)
-    return tf.Variable(initial)
+    return tf.Variable(initial, name=name)
 
 
 # define conv layer
@@ -63,59 +45,103 @@ def max_pool_2x2(x):
 with tf.name_scope('inputs'):
     xs = tf.placeholder(dtype=tf.float32, shape=[None, 28*28], name='x_inputs')
     ys = tf.placeholder(dtype=tf.float32, shape=[None, 10], name='y_inputs')
-    keep_prob = tf.placeholder(dtype=tf.float32, name='keep_prob4dropout')
 
     # sample count * width * height * channel
-    x_image = tf.reshape(xs,[-1, 28, 28, 1])
+    x_image = tf.reshape(xs, [-1, 28, 28, 1])
+    image_summary = tf.summary.image("images_summary", x_image, max_outputs=4)
 
+# convolutional layer 1
 with tf.name_scope('conv_layer_1'):
     # kernal width: 5
     # kernal height: 5
     # kernal channel: 1
     # kernal count: 32
-    W_conv1 = weight_variable([5, 5, 1, 32])
-    b_conv1 = bias_variable([32])
+    with tf.name_scope('weights'):
+        W_conv1 = weight_variable([5, 5, 1, 32], 'W_for_Conv_Layer_1')
+        # Transpose Tensor dimensions from [5, 5, 1, 32] to [32, 5, 5, 1]
+        tf.summary.image("kernels_1", tf.transpose(W_conv1, perm=[3, 0, 1, 2]), max_outputs=4)
 
-    h_conv1 = conv2d(x_image, W_conv1) + b_conv1  # output size 28*28*32
-    h_conv1 = tf.nn.relu(h_conv1)
-    h_pool1 = max_pool_2x2(h_conv1)  # output size 14*14*32
+    with tf.name_scope('bias'):
+        b_conv1 = bias_variable([32], 'bias_for_Conv_Layer_1')
 
+    with tf.name_scope('activations'):
+        h_conv1 = conv2d(x_image, W_conv1) + b_conv1  # output size -1*28*28*32
+        h_conv1 = tf.nn.relu(h_conv1)
+        # Transpose Tensor dimensions from [-1, 28, 28, 32] to [-1, 32, 28, 28]
+        # Merge dimension [-1] and [32], and show image
+        tf.summary.image('activations_1', tf.reshape(tf.transpose(h_conv1, perm=[0, 3, 1, 2]), [-1, 28, 28, 1]),
+                         max_outputs=4)
+
+# max pool layer 1
+with tf.name_scope('max_pool_layer_1'):
+    h_pool1 = max_pool_2x2(h_conv1)  # output size -1*14*14*32
+    # Transpose Tensor dimensions from [-1, 14, 14, 32] to [-1, 32, 14, 14]
+    # Merge dimension [-1] and [32], and show image
+    tf.summary.image('max_pool_1', tf.reshape(tf.transpose(h_conv1, perm=[0, 3, 1, 2]), [-1, 14, 14, 1]),
+                     max_outputs=4)
+
+# convolutional layer 2
 with tf.name_scope('conv_layer_2'):
     # kernal width: 5
     # kernal height: 5
     # kernal channel: 32
     # kernal count: 64
-    W_conv2 = weight_variable([5, 5, 32, 64])
-    b_conv2 = bias_variable([64])
+    with tf.name_scope('weights'):
+        W_conv2 = weight_variable([5, 5, 32, 64], 'W_for_Conv_Layer_2')
+        # Transpose Tensor dimensions from [5, 5, 32, 64] to [32*64, 5, 5, 1]
+        tf.summary.image('kernels_2', tf.reshape(tf.transpose(W_conv2, perm=[2, 3, 0, 1]), [-1, 5, 5, 1]),
+                         max_outputs=4)
 
-    h_conv2 = conv2d(h_pool1, W_conv2) + b_conv2  # output size 14*14*64
-    h_conv2 = tf.nn.relu(h_conv2)
-    h_pool2 = max_pool_2x2(h_conv2)  # output size 7*7*64
+    with tf.name_scope('bias'):
+        b_conv2 = bias_variable([64], 'bias_2')
 
-# add fully connected layer
-# function 1 layer
-W_fc1 = weight_variable([7*7*64, 1024])
-b_fc1 = bias_variable([1024])
-h_pool2_flat = tf.reshape(h_pool2, [-1, 7*7*64])  # shape: [7, 7, 64]-->[-1, 7*7*64]
+    with tf.name_scope('activations'):
+        h_conv2 = conv2d(h_pool1, W_conv2) + b_conv2  # output size -1*14*14*64
+        h_conv2 = tf.nn.relu(h_conv2)
+        # Transpose Tensor dimensions from [-1, 14, 14, 64] to [-1, 64, 14, 14]
+        # Merge dimension [-1] and [64], and show image
+        tf.summary.image('activations_2', tf.reshape(tf.transpose(h_conv2, perm=[0, 3, 1, 2]), [-1, 14, 14, 1]),
+                         max_outputs=4)
 
-h_fc1 = tf.matmul(h_pool2_flat, W_fc1) + b_fc1
-h_fc1 = tf.nn.relu(h_fc1)
+# max pool layer 2
+with tf.name_scope('max_pool_layer_2'):
+    h_pool2 = max_pool_2x2(h_conv2)  # output size -1*7*7*64
+    # Transpose Tensor dimensions from [-1, 7, 7, 64] to [-1, 64, 7, 7]
+    # Merge dimension [-1] and [64], and show image
+    tf.summary.image('max_pool_2', tf.reshape(tf.transpose(h_conv1, perm=[0, 3, 1, 2]), [-1, 7, 7, 1]),
+                     max_outputs=4)
 
-h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
+# fully connected layer 1
+with tf.name_scope('fully_connected_layer_1'):
+    W_fc1 = weight_variable([7*7*64, 1024], 'W_for_Fully_Connected_layer_1')
+    b_fc1 = bias_variable([1024], 'bias_for_Fully_Connected_layer_1')
+    h_pool2_flat = tf.reshape(h_pool2, [-1, 7*7*64])  # shape: [7, 7, 64]-->[-1, 7*7*64]
+    h_fc1 = tf.matmul(h_pool2_flat, W_fc1) + b_fc1
+    h_fc1 = tf.nn.relu(h_fc1)
+    # Also add histograms to TensorBoard
+    W_fc1_hist = tf.summary.histogram("W_fc1", W_fc1)
+    b_fc1_hist = tf.summary.histogram("b_fc1", b_fc1)
 
-# add prediction layer
-# function 2 layer
-W_fc2 = weight_variable([1024, 10])
-b_fc2 = bias_variable([10])
+    keep_prob = tf.placeholder(dtype=tf.float32, name='keep_prob4dropout')
+    h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
 
-prediction = tf.matmul(h_fc1_drop, W_fc2) + b_fc2
-prediction = tf.nn.softmax(prediction)
+# fully connected layer 2
+with tf.name_scope('fully_connected_layer_2'):
+    W_fc2 = weight_variable([1024, 10], 'W_for_Fully_Connected_layer_2')
+    b_fc2 = bias_variable([10], 'bias_for_Fully_Connected_layer_2')
 
+    prediction = tf.matmul(h_fc1_drop, W_fc2) + b_fc2
+    prediction = tf.nn.softmax(prediction)
+
+    # Also add histograms to TensorBoard
+    W_fc2_hist = tf.summary.histogram("W_fc2", W_fc2)
+    b_fc2_hist = tf.summary.histogram("b_fc2", b_fc2)
 
 # loss function
 with tf.name_scope('loss'):
     cross_entropy = tf.reduce_mean(-tf.reduce_sum(ys * tf.log(prediction), reduction_indices=[1]))
     tf.summary.scalar('loss', cross_entropy)
+
 # training
 with tf.name_scope('train'):
     train_step = tf.train.AdamOptimizer(learning_rate=1e-4).minimize(cross_entropy)
@@ -127,7 +153,7 @@ sess = tf.Session()
 
 sess.run(init)
 summaries = tf.summary.merge_all()
-writer = tf.summary.FileWriter('./graphs/cnn', sess.graph)
+writer = tf.summary.FileWriter('./graphs/cnn_', sess.graph)
 
 # start training
 for step in range(1000):
@@ -137,4 +163,5 @@ for step in range(1000):
         print(compute_accuracy(mnist.test.images[:100], mnist.test.labels[:100]))
         summary_result = sess.run(summaries, feed_dict={xs: xs_batch, ys: ys_batch, keep_prob: 1})
         writer.add_summary(summary_result, global_step=step)
+        writer.flush()
 print('OK')

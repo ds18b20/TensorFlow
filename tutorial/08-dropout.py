@@ -53,7 +53,7 @@ with tf.name_scope('loss'):
     tf.summary.scalar('loss', cross_entropy)
 # training
 with tf.name_scope('train'):
-    train_step = tf.train.GradientDescentOptimizer(learning_rate=0.005).minimize(cross_entropy)
+    train_step = tf.train.GradientDescentOptimizer(learning_rate=0.001).minimize(cross_entropy)
 
 # initialize
 init = tf.global_variables_initializer()
