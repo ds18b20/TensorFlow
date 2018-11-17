@@ -1,3 +1,6 @@
+# txt files
+*.txt
+
 # model detect Proj
 models
 CustomObjectDetection
